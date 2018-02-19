@@ -63,19 +63,17 @@ fn dfs_traverse<T: Hash+Eq+Copy>(graph: &Graph<T>) -> HashSet<NodeInfo<T>> {
     let mut result = HashSet::new();
     for node in nodes(graph) {
         if !visited.contains(&node) {
-            println!("Pre: {:?}",visited.contains(&node));
             let dfs_res = explore(&graph, node, &mut visited, &mut clock);
             for ni in dfs_res {
                 result.insert(ni);
             }
-            println!("Post: {:?}",visited.contains(&node));
         }
 
     }
     result
 }
 
-fn postorder<T: Hash+Eq+Copy>(node: &Node<T>, dfs: &HashSet<&NodeInfo<T>>) -> i32 {
+fn postorder<T: Hash+Eq+Copy>(node: &Node<T>, dfs: &HashSet<NodeInfo<T>>) -> i32 {
     let mut res: i32 = 0;
     for m in dfs {
         if &m.node == node {
@@ -85,7 +83,7 @@ fn postorder<T: Hash+Eq+Copy>(node: &Node<T>, dfs: &HashSet<&NodeInfo<T>>) -> i3
     res
 }
 
-fn back_edges<'a, T: Hash+Eq+Copy>(graph: &'a Graph<T>, dfs: HashSet<&'a NodeInfo<T>>) -> HashSet<&'a Edge<T>> {
+fn back_edges<'a, T: Hash+Eq+Copy>(graph: &'a Graph<T>, dfs: HashSet<NodeInfo<T>>) -> HashSet<&'a Edge<T>> {
     let mut edges = HashSet::new();
 
     for edge in &graph.edges {
@@ -96,11 +94,21 @@ fn back_edges<'a, T: Hash+Eq+Copy>(graph: &'a Graph<T>, dfs: HashSet<&'a NodeInf
     edges
 }
 
+fn has_cycles<T: Hash+Eq+Copy>(graph: &Graph<T>) -> bool {
+    let dfs = dfs_traverse(graph);
+
+    back_edges(graph, dfs).len() > 0
+}
+
+fn is_dag<T: Hash+Eq+Copy>(graph: &Graph<T>) -> bool {
+    !has_cycles(graph)
+}
+
 fn top_sort<T: Hash+Eq+Copy>(graph: &Graph<T>) ->  Vec<NodeInfo<T>> {
     let dfs = dfs_traverse(graph);
     dfs
         .into_iter()
-        .sorted_by(|ref a,ref b| a.postorder.cmp(&b.postorder))
+        .sorted_by(|ref a,ref b| b.postorder.cmp(&a.postorder))
 }
 
 fn main() {
@@ -114,27 +122,15 @@ fn main() {
     let H = Node{id: 'H'};
     
     let mut edges = HashSet::new();
-    edges.insert(Edge {source: A,dest: D,weight: 0});
+    edges.insert(Edge {source: A,dest: B,weight: 0});
     
     edges.insert(Edge {source: B,dest: C,weight: 0});
-    edges.insert(Edge {source: B,dest: E,weight: 0});
-    edges.insert(Edge {source: B,dest: A,weight: 0});    
-    
-    edges.insert(Edge {source: C,dest: F,weight: 0});
-  
-    edges.insert(Edge {source: F,dest: B,weight: 0});
-    edges.insert(Edge {source: F,dest: H,weight: 0});
-  
-    edges.insert(Edge {source: H,dest: G,weight: 0});
-  
-    edges.insert(Edge {source: D,dest: H,weight: 0});
-    edges.insert(Edge {source: D,dest: G,weight: 0});
-    edges.insert(Edge {source: D,dest: E,weight: 0});
-  
-    edges.insert(Edge {source: E,dest: A,weight: 0});
-    edges.insert(Edge {source: E,dest: G,weight: 0});
+
+    edges.insert(Edge {source: C, dest: D, weight: 0});
+
     
     let gr = Graph {edges: edges};
-    let nodeset = dfs_traverse(&gr);
+    let nodeset = top_sort(&gr);
     println!("{:?}", nodeset);
+    println!("{:?}", is_dag(&gr));
 }
