@@ -8,7 +8,7 @@ struct Node<T: Hash + Eq + Copy> {
     id: T
 }
 
-#[derive(Debug,PartialEq,Eq,Hash)]
+#[derive(Debug,PartialEq,Eq,Hash,Clone)]
 struct Edge<T: Hash+Eq+Copy> {
     source: Node<T>,
     dest: Node<T>,
@@ -26,33 +26,26 @@ struct Clock(pub i32);
 #[derive(Debug,PartialEq,Eq,Hash)]
 struct NodeInfo<T: Hash+Eq+Copy> {
     node: Node<T>,
+    parent: Option<Node<T>>,
     postorder: i32
 }
 
-fn nodes<T: Hash+Eq+Copy>(graph: &Graph<T>) -> HashSet<Node<T>> {
-    let mut all_nodes = HashSet::new();
-    for e in &graph.edges {
-        all_nodes.insert(e.source);
-        all_nodes.insert(e.dest);
-    }
-    all_nodes
-}
 
-fn explore<T: Hash+Eq+Copy>(graph: &Graph<T>, start: Node<T>, visited: &mut HashSet<Node<T>>, clock: &mut Clock) -> HashSet<NodeInfo<T>> {
+fn explore<T: Hash+Eq+Copy>(graph: &Graph<T>, start: Node<T>, visited: &mut HashSet<Node<T>>, clock: &mut Clock, parent: Option<Node<T>>) -> HashSet<NodeInfo<T>> {
     let mut result = HashSet::new();
     visited.insert(start);
     clock.0 += 1;
     for e in &graph.edges {
         if e.source == start {
             if (!visited.contains(&e.dest)) {
-                let next_layer = explore(graph, e.dest, visited, clock);
+                let next_layer = explore(graph, e.dest, visited, clock, Some(start));
                 for ni in next_layer {
                     result.insert(ni);
                 }
             }
         }        
     }
-    result.insert(NodeInfo {node: start, postorder: clock.0});
+    result.insert(NodeInfo {node: start, postorder: clock.0, parent: parent});
     clock.0 += 1;
     result
 }
@@ -61,9 +54,9 @@ fn dfs_traverse<T: Hash+Eq+Copy>(graph: &Graph<T>) -> HashSet<NodeInfo<T>> {
     let mut visited = HashSet::new();
     let mut clock = Clock(1);
     let mut result = HashSet::new();
-    for node in nodes(graph) {
+    for node in graph.nodes() {
         if !visited.contains(&node) {
-            let dfs_res = explore(&graph, node, &mut visited, &mut clock);
+            let dfs_res = explore(&graph, node, &mut visited, &mut clock, None);
             for ni in dfs_res {
                 result.insert(ni);
             }
@@ -94,14 +87,41 @@ fn back_edges<'a, T: Hash+Eq+Copy>(graph: &'a Graph<T>, dfs: HashSet<NodeInfo<T>
     edges
 }
 
-fn has_cycles<T: Hash+Eq+Copy>(graph: &Graph<T>) -> bool {
-    let dfs = dfs_traverse(graph);
+impl<T: Hash+Eq+Copy> Graph<T> {
+    
+    fn nodes(&self) -> HashSet<Node<T>> {
+        let mut all_nodes = HashSet::new();
+        for e in &self.edges {
+            all_nodes.insert(e.source);
+            all_nodes.insert(e.dest);
+        }
+        all_nodes
+    }
+    
+    fn has_cycles(&self) -> bool {
+        let dfs = dfs_traverse(self);
+        
+        back_edges(self, dfs).len() > 0
+    }
 
-    back_edges(graph, dfs).len() > 0
-}
+    fn is_dag(&self) -> bool {
+        !self.has_cycles()
+    }
 
-fn is_dag<T: Hash+Eq+Copy>(graph: &Graph<T>) -> bool {
-    !has_cycles(graph)
+    fn connected(&self) -> bool {
+        let mut clock = Clock(1);
+        let num_nodes = self.nodes().len();
+        for node in self.nodes() {
+            let mut visited = HashSet::new();
+
+            let res = explore(self, node, &mut visited, &mut clock, None);
+
+            if visited.len() < num_nodes {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 fn top_sort<T: Hash+Eq+Copy>(graph: &Graph<T>) ->  Vec<NodeInfo<T>> {
@@ -109,6 +129,27 @@ fn top_sort<T: Hash+Eq+Copy>(graph: &Graph<T>) ->  Vec<NodeInfo<T>> {
     dfs
         .into_iter()
         .sorted_by(|ref a,ref b| b.postorder.cmp(&a.postorder))
+}
+
+fn mst_kruskall<T: Hash+Eq+Copy>(graph: &Graph<T>) -> HashSet<Edge<T>> {
+    let mut mst = HashSet::new();
+
+    let sorted_edges = graph
+        .edges
+        .clone()
+        .into_iter()
+        .sorted_by(|a, b| a.weight.cmp(&b.weight));
+
+    for edge in sorted_edges {
+        let mut scratch_work = mst.clone();
+        scratch_work
+            .insert(edge.clone());
+        let gr = Graph {edges: scratch_work};
+        if !gr.has_cycles() {
+            mst.insert(edge);
+        }
+    }
+    mst
 }
 
 fn main() {
@@ -128,9 +169,12 @@ fn main() {
 
     edges.insert(Edge {source: C, dest: D, weight: 0});
 
+    edges.insert(Edge {source: D, dest: B, weight: 5});
     
     let gr = Graph {edges: edges};
     let nodeset = top_sort(&gr);
     println!("{:?}", nodeset);
-    println!("{:?}", is_dag(&gr));
+    println!("{:?}", gr.is_dag());
+    println!("{:?}", mst_kruskall(&gr));
+    println!("{:?}", gr.connected());
 }
